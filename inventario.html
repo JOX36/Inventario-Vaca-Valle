@@ -715,8 +715,14 @@ function setSyncStatus(state, msg){
 
 // ══ CALC ══
 function calcRow(r){
-  r.disp      =(r.ant||0)+(r.real||0)+(r.retorno||0);
-  r.dispReal  = r.disp-(r.dev||0);
+  // Para cheesecakes: TODOS los campos en unidades ÷12 → tortas
+  if(isCheesecake(r)){
+    r.disp     = ((r.ant||0)+(r.real||0)+(r.retorno||0)) / UNIDADES_TORTA;
+    r.dispReal = r.disp - (r.dev||0)/UNIDADES_TORTA;
+  } else {
+    r.disp     =(r.ant||0)+(r.real||0)+(r.retorno||0);
+    r.dispReal = r.disp-(r.dev||0);
+  }
   // Para cheesecakes: fin está en unidades → convertir a tortas para diff
   const _finTortas = (r.fin!==null&&r.fin!==undefined&&r.fin!=='')
     ? (isCheesecake(r) ? r.fin/UNIDADES_TORTA : r.fin)
@@ -899,25 +905,51 @@ function buildProd(){
         calcRow(r);refreshRow(r);debSave(r);
       });
       tdAnt.appendChild(inpAnt);
+      if(isCheesecake(r)){
+        const lbl=document.createElement('div');
+        lbl.style.cssText='font-size:6px;color:#7c4a1e;font-weight:700;text-align:center;line-height:1;';
+        lbl.textContent='ud'; tdAnt.appendChild(lbl);
+      }
     }else{
       tdAnt.className='cell-locked';
       tdAnt.textContent=r.ant||'—';
       tdAnt.title='Solo el administrador puede modificar el inventario anterior';
+      if(isCheesecake(r)){
+        const lbl=document.createElement('div');
+        lbl.style.cssText='font-size:6px;color:#7c4a1e;font-weight:700;text-align:center;line-height:1;';
+        lbl.textContent='ud'; tdAnt.appendChild(lbl);
+      }
     }
     tr.appendChild(tdAnt);
-    tr.appendChild(mkNum(r,'real'));
-    const tdRet=mkNum(r,'retorno'); tdRet.firstChild.style.borderColor='#4a8a4a'; tr.appendChild(tdRet);
-
-    const tdDev=mkNum(r,'dev'); tdDev.firstChild.style.borderColor='#e09090'; tr.appendChild(tdDev);
-    const tdDR=document.createElement('td'); tdDR.className='cell-disp'; tdDR.id='dispreal-'+r.id; tdDR.textContent=r.dispReal||''; tr.appendChild(tdDR);
+    // Para cheesecakes: real/retorno/dev/fin en unidades
+    const _mkProdField = (field, borderColor) => {
+      const td = mkNum(r, field);
+      if(borderColor) td.firstChild.style.borderColor = borderColor;
+      if(isCheesecake(r)){
+        const lbl=document.createElement('div');
+        lbl.style.cssText='font-size:6px;color:#7c4a1e;font-weight:700;text-align:center;line-height:1;';
+        lbl.textContent='ud';
+        td.appendChild(lbl);
+      }
+      return td;
+    };
+    tr.appendChild(_mkProdField('real', null));
+    tr.appendChild(_mkProdField('retorno','#4a8a4a'));
+    tr.appendChild(_mkProdField('dev','#e09090'));
+    const tdDR=document.createElement('td'); tdDR.className='cell-disp'; tdDR.id='dispreal-'+r.id;
+    // Disponible: mostrar en tortas con nota de unidades para cheesecakes
+    if(isCheesecake(r) && r.dispReal){
+      const unid = Math.round(r.dispReal * UNIDADES_TORTA * 10)/10;
+      tdDR.innerHTML='<b>'+Math.round(r.dispReal*100)/100+'</b><br><span style="font-size:6.5px;color:#888;">'+unid+' ud</span>';
+    } else {
+      tdDR.textContent=r.dispReal||'';
+    }
+    tr.appendChild(tdDR);
     // Inv.Final: cheesecakes en unidades, resto en tortas
-    const tdFin = mkNum(r,'fin');
+    const tdFin = _mkProdField('fin', null);
     if(isCheesecake(r)){
       tdFin.title='Ingresa en UNIDADES (÷12 = tortas)';
-      const lbl=document.createElement('div');
-      lbl.style.cssText='font-size:6px;color:#7c4a1e;font-weight:700;text-align:center;line-height:1;';
-      lbl.textContent='unidades';
-      tdFin.appendChild(lbl);
+      tdFin.querySelector('div').textContent='unidades';
     }
     tr.appendChild(tdFin);
 
@@ -1020,7 +1052,16 @@ function mkNum(r,field){
 
 function refreshRow(r){
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  set('dispreal-'+r.id,r.dispReal>0?r.dispReal:'');
+  // Disponible: para cheesecakes mostrar tortas + unidades
+  const drEl=document.getElementById('dispreal-'+r.id);
+  if(drEl){
+    if(isCheesecake(r) && r.dispReal){
+      const unid = Math.round(r.dispReal * UNIDADES_TORTA * 10)/10;
+      drEl.innerHTML='<b>'+Math.round(r.dispReal*100)/100+'</b><br><span style="font-size:6.5px;color:#888;">'+unid+' ud</span>';
+    } else {
+      drEl.textContent = r.dispReal>0 ? r.dispReal : '';
+    }
+  }
   const sEl=document.getElementById('sale-'+r.id); if(sEl)renderSale(sEl,r);
   const dEl=document.getElementById('diff-'+r.id); if(dEl)renderDiff(dEl,r.diff);
   const bEl=document.getElementById('bal-'+r.id);  if(bEl)renderBalance(bEl,r.balance);
