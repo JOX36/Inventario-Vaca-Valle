@@ -458,11 +458,13 @@ tr.dragging{opacity:.4;}
           <th class="th-punto col-sep" colspan="2">KM 25</th>
           <th class="th-punto col-sep" colspan="2">KM 18</th>
           <th class="th-punto col-sep" colspan="2">Peñón</th>
+          <th class="th-punto col-sep" colspan="2">Colseguros</th>
           <th class="th-mayor col-sep" rowspan="2" style="min-width:58px;background:#2a1a3a!important">Armenia</th>
           <th class="th-mayor col-sep" rowspan="2" style="min-width:58px">X Mayor</th>
           <th class="th-bal   col-sep" rowspan="2" style="min-width:78px">Balance</th>
         </tr>
         <tr class="head-sub">
+          <th class="col-sep" style="min-width:58px">☀ Mañana</th><th style="min-width:58px">🌙 Tarde</th>
           <th class="col-sep" style="min-width:58px">☀ Mañana</th><th style="min-width:58px">🌙 Tarde</th>
           <th class="col-sep" style="min-width:58px">☀ Mañana</th><th style="min-width:58px">🌙 Tarde</th>
           <th class="col-sep" style="min-width:58px">☀ Mañana</th><th style="min-width:58px">🌙 Tarde</th>
@@ -846,11 +848,13 @@ function buildTables(){ buildProd(); buildVenta(); }
 function buildProd(){
   const tb=document.getElementById('prodBody');
   tb.innerHTML='';
-  if(!rows.length){
+  // Cheesecakes de sabor NO aparecen en producción
+  const prodRows = rows.filter(r=>!isCheesecake(r));
+  if(!prodRows.length){
     tb.innerHTML=`<tr class="empty-row"><td colspan="10" class="left">Sin productos — pulsa <strong>＋ Producto</strong> para comenzar.</td></tr>`;
     return;
   }
-  rows.forEach((r,i)=>{
+  prodRows.forEach((r,i)=>{
     calcRow(r);
     const tr=document.createElement('tr');
     tr.dataset.id=r.id; tr.draggable=true;
@@ -987,10 +991,24 @@ function buildVenta(){
   const tb=document.getElementById('ventaBody');
   tb.innerHTML='';
   if(!rows.length){
-    tb.innerHTML=`<tr class="empty-row"><td colspan="11" class="left">Agrega productos en producción.</td></tr>`;
+    tb.innerHTML=`<tr class="empty-row"><td colspan="13" class="left">Agrega productos en producción.</td></tr>`;
     return;
   }
-  rows.forEach(r=>{
+  // Calcular total unidades decoradas de los 7 sabores
+  const totalDecoradas = rows.filter(r=>isCheesecake(r)).reduce((s,r)=>{
+    calcRow(r);
+    return s + (r.totalVentasUnidades||r.totalVentas||0);
+  },0);
+  // Actualizar Torta Cheesecake con el total decorado
+  const tortaBase = rows.find(r=>isTortaCheesecake(r));
+  if(tortaBase){
+    calcRow(tortaBase);
+    tortaBase._decoradas = totalDecoradas;
+  }
+
+  // Ventas: NO mostrar Torta Cheesecake, SÍ mostrar los 7 sabores + resto
+  const ventaRows = rows.filter(r=>!isTortaCheesecake(r));
+  ventaRows.forEach(r=>{
     calcRow(r);
     const tr=document.createElement('tr');
     const tdN=document.createElement('td'); tdN.className='left';
@@ -1005,6 +1023,28 @@ function buildVenta(){
     const tdB=document.createElement('td'); tdB.id='bal-'+r.id; renderBalance(tdB,r.balance); tr.appendChild(tdB);
     document.getElementById('ventaBody').appendChild(tr);
   });
+
+  // Mostrar fila resumen de Torta Cheesecake si existe
+  if(tortaBase){
+    const trSum=document.createElement('tr');
+    trSum.style.cssText='background:#f5ece0;border-top:2px solid #7c4a1e;';
+    const disp = tortaBase.dispReal||0;
+    const decoradas = totalDecoradas;
+    const restantes = disp - decoradas;
+    const cuadra = tortaBase.fin!==null ? Math.abs((tortaBase.fin - restantes)) < 0.01 : null;
+    trSum.innerHTML=`
+      <td class="left" colspan="2" style="font-weight:700;color:#7c4a1e;font-size:.75rem;padding:5px 8px;">
+        🧀 Torta Cheesecake — Stock sin decorar
+      </td>
+      <td colspan="9" style="font-size:.75rem;padding:5px 8px;">
+        Disponible: <b>${disp}</b> ud &nbsp;|&nbsp;
+        Decoradas hoy: <b style="color:#c05000;">${decoradas}</b> ud &nbsp;|&nbsp;
+        Restantes: <b>${Math.round(restantes*10)/10}</b> ud
+        ${tortaBase.fin!==null ? (cuadra ? '&nbsp;<span style="color:green;font-weight:700;">✔ Cuadra</span>' : '&nbsp;<span style="color:red;font-weight:700;">✗ Diferencia: '+(Math.round((tortaBase.fin-restantes)*10)/10)+'</span>') : ''}
+      </td>
+      <td style="padding:5px 8px;"></td>`;
+    document.getElementById('ventaBody').appendChild(trSum);
+  }
 }
 
 // debounce save para no disparar una petición por cada tecla
@@ -2090,6 +2130,10 @@ const CHEESECAKES = [
 const UNIDADES_TORTA = 12;
 function isCheesecake(r){
   return CHEESECAKES.includes((r.name||'').toLowerCase().trim());
+}
+// Detecta la torta base sin decorar
+function isTortaCheesecake(r){
+  return (r.name||'').toLowerCase().trim() === 'torta cheesecake';
 }
 
 // ══ DESPACHOS MÚLTIPLES ══
