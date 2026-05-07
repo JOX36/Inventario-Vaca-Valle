@@ -774,6 +774,7 @@ async function loadAll(){
       v1m:(p.v1m===0||p.v1m===null)?null:p.v1m, v1t:(p.v1t===0||p.v1t===null)?null:p.v1t,
       v2m:(p.v2m===0||p.v2m===null)?null:p.v2m, v2t:(p.v2t===0||p.v2t===null)?null:p.v2t,
       v3m:(p.v3m===0||p.v3m===null)?null:p.v3m, v3t:(p.v3t===0||p.v3t===null)?null:p.v3t,
+      v4m:(p.v4m===0||p.v4m===null)?null:p.v4m, v4t:(p.v4t===0||p.v4t===null)?null:p.v4t,
       armenia:(p.armenia===0||p.armenia===null)?null:p.armenia,
       xmayor:(p.xmayor===0||p.xmayor===null)?null:p.xmayor,
       despachos:p.despachos||{},
@@ -838,7 +839,7 @@ async function saveAllOrders(){
     rows[i].orden=i;
   }
   try{
-    await sbUpsert('productos2', rows.map((r,i)=>({id:r.id,orden:i,name:r.name||'',ant:r.ant,real:r.real,retorno:r.retorno,dev:r.dev,fin:r.fin,v1m:r.v1m,v1t:r.v1t,v2m:r.v2m,v2t:r.v2t,v3m:r.v3m,v3t:r.v3t,armenia:r.armenia,xmayor:r.xmayor,updated_at:new Date().toISOString()})));
+    await sbUpsert('productos2', rows.map((r,i)=>({id:r.id,orden:i,name:r.name||'',ant:r.ant,real:r.real,retorno:r.retorno,dev:r.dev,fin:r.fin,v1m:r.v1m,v1t:r.v1t,v2m:r.v2m,v2t:r.v2t,v3m:r.v3m,v3t:r.v3t,v4m:r.v4m,v4t:r.v4t,armenia:r.armenia,xmayor:r.xmayor,despachos:r.despachos||{},updated_at:new Date().toISOString()})));
   } catch(e){ console.error(e); }
 }
 
@@ -2272,14 +2273,18 @@ function mkInpDespacho(r, field, idx){
     if(idx === null){
       r[field] = isNaN(num) ? null : num;
       this.value = isNaN(num) ? '' : num;
+      calcRow(r); refreshRow(r);
+      clearTimeout(_debTimers[r.id]);
+      _debTimers[r.id] = null;
+      saveRow(r, field); // ← guardar el campo directo (v1m, v2m, etc.)
     } else {
       if(!r.despachos[field]) r.despachos[field] = [];
       r.despachos[field][idx] = isNaN(num) ? null : num;
+      calcRow(r); refreshRow(r);
+      clearTimeout(_debTimers[r.id]);
+      _debTimers[r.id] = null;
+      saveRow(r, 'despachos');
     }
-    calcRow(r); refreshRow(r);
-    clearTimeout(_debTimers[r.id]);
-    _debTimers[r.id] = null;
-    saveRow(r, 'despachos');
     setTimeout(()=>{ r._localEdit=false; }, 800);
   });
 
