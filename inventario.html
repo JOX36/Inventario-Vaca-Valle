@@ -2175,42 +2175,78 @@ function renderDespacho(td, r, field){
   if(!r.despachos) r.despachos = {};
   const arr = r.despachos[field] || [];
 
-  // Si no hay despachos, mostrar campo simple
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;align-items:center;gap:2px;flex-wrap:nowrap;';
+
   if(arr.length === 0){
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;gap:2px;';
-    const inp = mkInpDespacho(r, field, null); // null = campo directo
+    // Campo simple + botón +
+    const inp = mkInpDespacho(r, field, null);
     const btnAdd = document.createElement('button');
     btnAdd.textContent = '+';
     btnAdd.title = 'Agregar otro despacho';
     btnAdd.style.cssText = 'background:var(--verde);color:white;border:none;border-radius:3px;width:16px;height:16px;font-size:9px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;';
     btnAdd.addEventListener('click', function(e){
       e.stopPropagation();
-      // Convertir a modo despachos múltiples
       const val = r[field];
-      r.despachos[field] = val!==null ? [val] : [null];
+      r.despachos[field] = val!==null&&val!==undefined ? [val] : [null];
       r[field] = null;
       renderDespacho(td, r, field);
     });
     wrap.appendChild(inp);
     wrap.appendChild(btnAdd);
-    td.appendChild(wrap);
-    return;
+  } else {
+    // Modo compacto: mostrar suma total editable + desglose pequeño + botones
+    const sum = arr.reduce((s,v)=>s+(parseFloat(v)||0), 0);
+
+    // Desglose en texto pequeño
+    const vals = arr.filter(v=>v!==null&&v!==undefined&&v!=='');
+    if(vals.length > 1){
+      const lbl = document.createElement('span');
+      lbl.style.cssText = 'font-size:.65rem;color:var(--madera);font-weight:700;white-space:nowrap;cursor:pointer;';
+      lbl.title = 'Toca para editar despachos: '+vals.join('+')+'='+sum;
+      lbl.textContent = vals.join('+')+'='+sum;
+      // Al tocar el desglose, mostrar inputs para editar
+      lbl.addEventListener('click', function(){
+        renderDespachoEdicion(td, r, field);
+      });
+      wrap.appendChild(lbl);
+    } else {
+      // Solo un despacho — mostrar input editable directamente
+      const inp = mkInpDespacho(r, field, 0);
+      wrap.appendChild(inp);
+    }
+
+    // Botón + para agregar otro
+    const btnAdd = document.createElement('button');
+    btnAdd.textContent = '+';
+    btnAdd.title = 'Agregar otro despacho';
+    btnAdd.style.cssText = 'background:var(--verde);color:white;border:none;border-radius:3px;width:16px;height:16px;font-size:9px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;';
+    btnAdd.addEventListener('click', function(e){
+      e.stopPropagation();
+      r.despachos[field].push(null);
+      renderDespachoEdicion(td, r, field);
+    });
+    wrap.appendChild(btnAdd);
   }
 
-  // Modo múltiples despachos
+  td.appendChild(wrap);
+}
+
+// Vista de edición expandida (al tocar el desglose)
+function renderDespachoEdicion(td, r, field){
+  td.innerHTML = '';
+  if(!r.despachos) r.despachos = {};
+  const arr = r.despachos[field] || [];
+
   arr.forEach((val, i) => {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;gap:2px;margin-bottom:2px;';
-
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:2px;margin-bottom:2px;';
     const inp = mkInpDespacho(r, field, i);
-    wrap.appendChild(inp);
-
-    // Botón quitar fila (solo si hay más de una)
+    row.appendChild(inp);
     if(arr.length > 1){
       const btnDel = document.createElement('button');
       btnDel.textContent = '×';
-      btnDel.style.cssText = 'background:var(--rojo);color:white;border:none;border-radius:3px;width:14px;height:14px;font-size:9px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;';
+      btnDel.style.cssText = 'background:var(--rojo);color:white;border:none;border-radius:3px;width:14px;height:14px;font-size:9px;cursor:pointer;padding:0;line-height:1;';
       btnDel.addEventListener('click', function(e){
         e.stopPropagation();
         r.despachos[field].splice(i, 1);
@@ -2219,30 +2255,22 @@ function renderDespacho(td, r, field){
         renderDespacho(td, r, field);
         saveRow(r, 'despachos');
       });
-      wrap.appendChild(btnDel);
+      row.appendChild(btnDel);
     }
-    td.appendChild(wrap);
+    td.appendChild(row);
   });
 
-  // Botón agregar nueva fila
-  const btnAdd = document.createElement('button');
-  btnAdd.textContent = '+ despacho';
-  btnAdd.style.cssText = 'background:var(--verde);color:white;border:none;border-radius:3px;padding:1px 4px;font-size:8px;cursor:pointer;margin-top:1px;width:100%;';
-  btnAdd.addEventListener('click', function(e){
+  // Botón listo — vuelve a vista compacta
+  const btnOk = document.createElement('button');
+  btnOk.textContent = '✓';
+  btnOk.style.cssText = 'background:var(--verde);color:white;border:none;border-radius:3px;padding:1px 6px;font-size:.7rem;cursor:pointer;margin-top:2px;width:100%;';
+  btnOk.addEventListener('click', function(e){
     e.stopPropagation();
-    r.despachos[field].push(null);
+    calcRow(r); refreshRow(r);
+    saveRow(r, 'despachos');
     renderDespacho(td, r, field);
   });
-  td.appendChild(btnAdd);
-
-  // Total si hay más de 1
-  if(arr.filter(v=>v!==null).length > 1){
-    const tot = document.createElement('div');
-    const sum = arr.reduce((s,v)=>s+(parseFloat(v)||0), 0);
-    tot.style.cssText = 'font-size:7.5px;color:var(--madera);font-weight:700;text-align:right;border-top:1px solid var(--gris2);margin-top:2px;padding-top:1px;';
-    tot.textContent = '= '+sum;
-    td.appendChild(tot);
-  }
+  td.appendChild(btnOk);
 }
 
 function mkInpDespacho(r, field, idx){
