@@ -1019,9 +1019,27 @@ function buildVenta(){
     [['v1m','v1t'],['v2m','v2t'],['v3m','v3t'],['v4m','v4t']].forEach(([m,t])=>{
       tr.appendChild(mkDespacho(r,m)); tr.appendChild(mkDespacho(r,t));
     });
-    tr.appendChild(mkDespacho(r,'armenia'));
+    // Armenia: campo simple sin botón + (se despacha cada 15 días)
+    tr.appendChild(mkNum(r,'armenia'));
     tr.appendChild(mkDespacho(r,'xmayor'));
     const tdB=document.createElement('td'); tdB.id='bal-'+r.id; renderBalance(tdB,r.balance); tr.appendChild(tdB);
+    // Botón eliminar producto (solo admin)
+    if(isAdmin()){
+      const tdDel=document.createElement('td'); tdDel.style.padding='2px 4px';
+      const btnDel=document.createElement('button');
+      btnDel.textContent='🗑'; btnDel.title='Eliminar producto';
+      btnDel.style.cssText='background:none;border:none;cursor:pointer;font-size:.9rem;color:#ccc;padding:2px 5px;';
+      btnDel.addEventListener('click', async ()=>{
+        if(!confirm('¿Eliminar "'+r.name+'" del inventario?')) return;
+        try{
+          await sbDelete('productos2',{id:r.id});
+          rows=rows.filter(x=>x.id!==r.id);
+          buildTables();
+          setSyncStatus('ok','✓ Producto eliminado');
+        }catch(e){setSyncStatus('err','✗ Error al eliminar');}
+      });
+      tdDel.appendChild(btnDel); tr.appendChild(tdDel);
+    }
     document.getElementById('ventaBody').appendChild(tr);
   });
 
