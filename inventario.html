@@ -417,7 +417,6 @@ tr.dragging{opacity:.4;}
   <button class="btn" style="background:#2a1a3a;color:#c8a8f0;" onclick="openBuscador()">📊 Consultar Producción</button>
   <button class="btn btn-print" onclick="openModal()">📄 Consolidado</button>
   <button class="btn" style="background:#2a0a0a;color:#e88;" onclick="openTrash()">🗑 Papelera</button>
-  <button class="btn" id="btnMigraCheese" style="background:#1a3a2a;color:#6dbb6d;border:1px solid #6dbb6d;" onclick="migrarAntCheesecakes()">🧀 Migrar Ant Cheesecakes ×12</button>
 </div>
 
 <div class="main">
@@ -742,6 +741,7 @@ function calcRow(r){
   r.v1m=_d('v1m'); r.v1t=_d('v1t');
   r.v2m=_d('v2m'); r.v2t=_d('v2t');
   r.v3m=_d('v3m'); r.v3t=_d('v3t');
+  r.v4m=_d('v4m'); r.v4t=_d('v4t');
   r.v4m=_d('v4m'); r.v4t=_d('v4t');
   r.armenia=_d('armenia'); r.xmayor=_d('xmayor');
   // Para cheesecakes: ventas en unidades → totalVentas en tortas
@@ -2337,45 +2337,6 @@ function mkInpDespacho(r, field, idx){
   return inp;
 }
 
-// ══ MIGRACIÓN ANT CHEESECAKES ══
-async function migrarAntCheesecakes(){
-  if(!requestAdmin()) return;
-  const cheese = rows.filter(r=>isCheesecake(r) && r.ant!==null && r.ant>0);
-  if(!cheese.length){ alert('No hay cheesecakes con inventario anterior.'); return; }
-  const lista = cheese.map(r=>'• '+r.name+': '+r.ant+' tortas → '+(r.ant*UNIDADES_TORTA)+' unidades').join('\n');
-  // Confirmar mostrando los valores
-  const modal = document.createElement('div');
-  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;';
-  modal.innerHTML=`<div style="background:white;border-radius:12px;padding:24px;max-width:400px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-    <div style="font-family:'Playfair Display',serif;font-size:1.1rem;font-weight:700;margin-bottom:8px;">🧀 Migrar Ant Cheesecakes</div>
-    <div style="font-size:.78rem;color:#555;margin-bottom:12px;">Se multiplicará el Ant actual × 12 (tortas → unidades):</div>
-    <pre style="background:#f5f5f5;border-radius:6px;padding:10px;font-size:.75rem;color:#333;white-space:pre-wrap;">${lista}</pre>
-    <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
-      <button id="migraSi" style="background:#1e5c1e;color:white;border:none;padding:8px 16px;border-radius:6px;font-weight:700;cursor:pointer;">✅ Confirmar</button>
-      <button id="migraNo" style="background:#eee;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">Cancelar</button>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-  modal.querySelector('#migraNo').onclick = () => document.body.removeChild(modal);
-  modal.querySelector('#migraSi').onclick = async () => {
-    document.body.removeChild(modal);
-    setSyncStatus('sync','⟳ Migrando...');
-    for(const r of cheese){
-      r.ant = r.ant * UNIDADES_TORTA;
-      await fetch(SB_URL+'/rest/v1/productos2?id=eq.'+r.id,{
-        method:'PATCH',
-        headers:{...HEADS,'Prefer':'return=minimal'},
-        body:JSON.stringify({ant:r.ant, updated_at:new Date().toISOString()})
-      });
-    }
-    buildTables();
-    setSyncStatus('ok','✓ Migración completada');
-    // Ocultar botón después de migrar
-    const btn=document.getElementById('btnMigraCheese');
-    if(btn) btn.style.display='none';
-    alert('✅ Ant de cheesecakes convertido a unidades correctamente.');
-  };
-}
 
 // ══ INIT ══
 document.getElementById('histEditSaveBtn').addEventListener('click', guardarEditorHistorial);
