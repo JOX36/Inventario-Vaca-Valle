@@ -741,8 +741,7 @@ function calcRow(r){
   r.v1m=_d('v1m'); r.v1t=_d('v1t');
   r.v2m=_d('v2m'); r.v2t=_d('v2t');
   r.v3m=_d('v3m'); r.v3t=_d('v3t');
-  r.v4m=_d('v4m'); r.v4t=_d('v4t');
-  r.v4m=_d('v4m'); r.v4t=_d('v4t');
+  r.v4m=_d('v4m'); r.v4t=_d('v4t'); // FIX: linea duplicada eliminada
   r.armenia=_d('armenia'); r.xmayor=_d('xmayor');
   // Para cheesecakes: ventas en unidades → totalVentas en tortas
   if(isCheesecake(r)){
@@ -777,6 +776,8 @@ async function loadAll(){
       v4m:(p.v4m===0||p.v4m===null)?null:p.v4m, v4t:(p.v4t===0||p.v4t===null)?null:p.v4t,
       armenia:(p.armenia===0||p.armenia===null)?null:p.armenia,
       xmayor:(p.xmayor===0||p.xmayor===null)?null:p.xmayor,
+      // FIX: restaurar ant desde el valor crudo (0 es válido: inventario vacío heredado)
+      ant: (p.ant === null || p.ant === undefined) ? null : p.ant,
       despachos:p.despachos||{},
     }));
     hist  = hists.map(h=>({...h, snapshot:h.snapshot}));
@@ -1225,7 +1226,7 @@ function updateBadge(){
 async function addRow(){
   if(!requestAdmin())return;
   const r={id:uid(),name:'',ant:null,real:null,retorno:null,dev:null,fin:null,
-    v1m:null,v1t:null,v2m:null,v2t:null,v3m:null,v3t:null,valle:null,mayor:null,orden:rows.length};
+    v1m:null,v1t:null,v2m:null,v2t:null,v3m:null,v3t:null,v4m:null,v4t:null,armenia:null,xmayor:null,despachos:{},orden:rows.length};
   rows.push(r);
   buildTables();
   await saveRow(r);
@@ -1381,11 +1382,13 @@ async function ejecutarCierre(encargado){
       });
       if(!resp.ok){
         const txt = await resp.text();
-        console.error('Error guardando '+r.name+':', txt);
+        throw new Error('Fallo al guardar "'+r.name+'": '+txt);
       }
     }
   }catch(e){
-    alert('⚠️ Error al guardar el inventario: '+e.message+'\nIntenta de nuevo.');
+    window._cerrando = false;
+    alert('⚠️ Error al guardar el inventario: '+e.message+'\n\nEl cierre NO se completó. Recargando el inventario...');
+    loadAll(); // restaurar estado desde Supabase
     return;
   }
   // Ahora reconstruir UI con datos limpios
