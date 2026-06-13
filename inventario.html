@@ -1339,6 +1339,11 @@ async function cerrarDia(){
 // Se llama desde el modal de encargado al confirmar
 async function ejecutarCierre(encargado){
   window._cerrando = true;
+  // Cancelar cualquier guardado de campo pendiente (debounce) para evitar
+  // que un PATCH tardío sobreescriba los nulls del cierre
+  Object.keys(_debTimers).forEach(k=>{ clearTimeout(_debTimers[k]); _debTimers[k]=null; });
+  // Dar 200ms por si hay un blur/save en vuelo que ya escapó del debounce
+  await new Promise(res=>setTimeout(res,200));
   const now=new Date();
   const label=now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const timeStr=now.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
@@ -1361,11 +1366,11 @@ async function ejecutarCierre(encargado){
   // Limpiar marcas de edición local
   rows.forEach(r=>{ r._localEdit=false; });
   setSyncStatus('sync','⟳ Guardando...');
-  // Guardar con PATCH explícito — garantiza que los nulls se escriben correctamente
-  // sbUpsert puede ignorar nulls en algunos casos, PATCH no
+  // Guardar con PATCH en paralelo — más rápido y evita que el usuario
+  // recargue la página antes de que terminen todos los guardados
   try{
-    for(const r of rows){
-      const resp = await fetch(SB_URL+'/rest/v1/productos2?id=eq.'+r.id,{
+    const patches = rows.map(r=>
+      fetch(SB_URL+'/rest/v1/productos2?id=eq.'+r.id,{
         method:'PATCH',
         headers:{...HEADS,'Prefer':'return=minimal'},
         body:JSON.stringify({
@@ -1379,23 +1384,49 @@ async function ejecutarCierre(encargado){
           armenia:null, xmayor:null, despachos:{},
           updated_at: new Date().toISOString()
         })
-      });
-      if(!resp.ok){
-        const txt = await resp.text();
-        throw new Error('Fallo al guardar "'+r.name+'": '+txt);
-      }
-    }
+      }).then(async resp=>{
+        if(!resp.ok){
+          const txt = await resp.text();
+          throw new Error('Fallo al guardar "'+r.name+'": '+txt);
+        }
+      })
+    );
+    await Promise.all(patches);
   }catch(e){
     window._cerrando = false;
     alert('⚠️ Error al guardar el inventario: '+e.message+'\n\nEl cierre NO se completó. Recargando el inventario...');
     loadAll(); // restaurar estado desde Supabase
     return;
   }
-  // Ahora reconstruir UI con datos limpios
-  buildTables();
   setSyncStatus('ok','✓ Todo guardado');
-  // recargar historial
-  try{ const h=await sbGet('historial2','order=created_at.desc&limit='+MAX_HIST); hist=h; }catch(e){}
+  // Recargar datos frescos desde Supabase para confirmar que el cierre quedó bien
+  // Esto evita que al día siguiente se vean datos del día anterior
+  try{
+    const [prods, hists] = await Promise.all([
+      sbGet('productos2','order=orden.asc,id.asc'),
+      sbGet('historial2','order=created_at.desc&limit='+MAX_HIST)
+    ]);
+    rows = prods.map(p=>({
+      ...p,
+      real:    (p.real===0||p.real===null)    ? null : p.real,
+      retorno: (p.retorno===0||p.retorno===null) ? null : p.retorno,
+      dev:     (p.dev===0||p.dev===null)      ? null : p.dev,
+      fin:     (p.fin===0||p.fin===null)      ? null : p.fin,
+      v1m:(p.v1m===0||p.v1m===null)?null:p.v1m, v1t:(p.v1t===0||p.v1t===null)?null:p.v1t,
+      v2m:(p.v2m===0||p.v2m===null)?null:p.v2m, v2t:(p.v2t===0||p.v2t===null)?null:p.v2t,
+      v3m:(p.v3m===0||p.v3m===null)?null:p.v3m, v3t:(p.v3t===0||p.v3t===null)?null:p.v3t,
+      v4m:(p.v4m===0||p.v4m===null)?null:p.v4m, v4t:(p.v4t===0||p.v4t===null)?null:p.v4t,
+      armenia:(p.armenia===0||p.armenia===null)?null:p.armenia,
+      xmayor:(p.xmayor===0||p.xmayor===null)?null:p.xmayor,
+      ant: (p.ant === null || p.ant === undefined) ? null : p.ant,
+      despachos:p.despachos||{},
+    }));
+    hist = hists;
+  }catch(e){
+    console.error('Error recargando tras cierre:', e);
+  }
+  // Reconstruir UI con datos frescos confirmados desde Supabase
+  buildTables();
   window._cerrando = false;
   alert('✅ Día cerrado a las '+timeStr+'.\nInventario final copiado como anterior de mañana.');
 }
